@@ -1,0 +1,71 @@
+[project]
+name = "ratu-fix-bot"
+version = "0.1.0"
+description = "FIX protocol connector with defensive message parsing for market data and order entry"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Adityo Nugroho", email = "adityo.nugroho.id@gmail.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+]
+dependencies = [
+    "simplefix",
+    "cryptography",
+    "python-dotenv",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+
+[project.scripts]
+ratu-fix-bot = "ratu_fix_bot.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# =============================================================================
+# Pytest Configuration
+# =============================================================================
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+# =============================================================================
+# Ruff Linting Configuration
+# =============================================================================
+[tool.ruff]
+exclude = [".git", ".venv", "build", "dist", "__pycache__", "*.egg-info"]
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = [
+    "F401",
+    "F841",
+    "E501",
+]
+fixable = ["ALL"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
