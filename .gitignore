@@ -215,3 +215,6 @@ snapshots/*
 
 # Secrets (Ed25519 keys)
 secrets/
+
+# Internal
+_private/

@@ -4,6 +4,18 @@
 
 FIX protocol connector for Binance with defensive message parsing.
 
+![MVP](https://img.shields.io/badge/readiness-mvp-yellow.svg)
+
+## Production Readiness
+
+**Level: MVP**
+
+This system demonstrates production-focused FIX protocol integration with:
+- **Defensive parser modifications** handling malformed FIX messages gracefully
+- **ED25519 authentication** for secure, non-expiring API access
+- **Three-session architecture** (Market Data, Order Entry, Drop Copy)
+- **Spread market making strategy** with price chasing
+
 > **System Prototyping Focus**: Low-latency FIX protocol integration for market data and order entry
 
 ## Part of RATUProject
@@ -50,8 +62,6 @@ flowchart TB
     style AUTH fill:#4A90E2
 ```
 
----
-
 ## FIX Message Flow
 
 ```mermaid
@@ -74,8 +84,6 @@ sequenceDiagram
     Bot->>Connector: logout()
     Connector->>Binance: Logout (5)
 ```
-
----
 
 ## Market Making Loop
 
@@ -155,8 +163,6 @@ sell_price = current_ask × (1 + spread_offset)  # Above best ask
 ```
 
 > FIX messages use `|` as field separator. Key tags: `35=A` (Logon), `35=D` (NewOrderSingle), `35=V` (MarketDataRequest), `54=1/2` (Buy/Sell)
-
----
 
 ## Installation
 
@@ -241,8 +247,6 @@ uv run python examples/order_entry.py
 uv run pytest
 ```
 
----
-
 ## Project Structure
 
 ```
@@ -277,8 +281,6 @@ uv run ratu-fix-bot --symbol BTCUSDT --qty 0.001 --spread 0.05 --stale-threshold
 uv run ratu-fix-bot --help
 ```
 
----
-
 ## SDK Modifications
 
 The following modifications were made to the official Binance FIX SDK for robustness:
@@ -310,8 +312,6 @@ Replaces the original `parse_server_response_original` with a defensive parser:
 
 > **Reason**: The original Binance SDK parser crashes on certain market data symbols with malformed FIX messages. This fix provides graceful degradation.
 
----
-
 ## Design Decisions
 
 | Decision | Rationale |
@@ -320,8 +320,6 @@ Replaces the original `parse_server_response_original` with a defensive parser:
 | ED25519 | Secure, non-expiring authentication |
 | Defensive Parser | Graceful handling of malformed messages |
 | Thread-based Receiver | Non-blocking message reception |
-
----
 
 ## Protocol Reference
 
@@ -333,7 +331,13 @@ Replaces the original `parse_server_response_original` with a defensive parser:
 
 For more information, see [Binance FIX API Documentation](https://developers.binance.com/docs/binance-spot-api-docs/fix-api).
 
----
+## Notable Code
+
+This repository demonstrates production-focused FIX protocol integration patterns. See [NOTABLE_CODE.md](NOTABLE_CODE.md) for detailed code examples highlighting:
+
+- Defensive parser modifications
+- ED25519 authentication implementation
+- Three-session FIX architecture
 
 ## License
 
@@ -341,6 +345,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Author
 
-**Adityo Nugroho**
-- GitHub: https://github.com/adityonugrohoid
+**Adityo Nugroho**  
+- Portfolio: https://adityonugrohoid.github.io  
+- GitHub: https://github.com/adityonugrohoid  
 - LinkedIn: https://www.linkedin.com/in/adityonugrohoid/
