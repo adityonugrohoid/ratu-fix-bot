@@ -1,26 +1,13 @@
 # RATU FIX Bot
 
-[Python 3.10+](https://www.python.org/downloads/) | [uv](https://github.com/astral-sh/uv) | [RATUProject](https://github.com/adityonugrohoid)
+![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)
+![RATUProject](https://img.shields.io/badge/project-RATU-blueviolet.svg)
 
 FIX protocol connector for Binance with defensive message parsing.
 
-![MVP](https://img.shields.io/badge/readiness-mvp-yellow.svg)
-
-## Production Readiness
-
-**Level: MVP**
-
-This system demonstrates production-focused FIX protocol integration with:
-- **Defensive parser modifications** handling malformed FIX messages gracefully
-- **ED25519 authentication** for secure, non-expiring API access
-- **Three-session architecture** (Market Data, Order Entry, Drop Copy)
-- **Spread market making strategy** with price chasing
-
+> 🔗 **Part of the RATUProject** | Real-time Automated Trading Unified  
 > **System Prototyping Focus**: Low-latency FIX protocol integration for market data and order entry
-
-## Part of RATUProject
-
-This repository is part of **RATUProject** (Real-time Automated Trading Unified) - an open-source portfolio demonstrating real-time, event-driven system design for financial markets and blockchain integrations.
 
 ## Features
 
