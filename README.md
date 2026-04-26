@@ -7,11 +7,10 @@
 [![FIX 4.4](https://img.shields.io/badge/FIX-4.4-orange.svg)](https://www.fixtrading.org/standards/fix-4-4/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![RATU Project](https://img.shields.io/badge/project-RATU-blueviolet.svg)](https://github.com/adityonugrohoid/ratu-template)
-[![Status](https://img.shields.io/badge/status-active-success.svg)](#)
 
-**Low-latency Binance FIX protocol bot — ED25519 auth, defensive message parsing, three-session architecture, and a spread market-making loop.**
+**Low-latency Binance FIX protocol bot with ED25519 auth, defensive parsing, and a spread market-making loop.**
 
-[Getting Started](#getting-started) | [Architecture](#architecture) | [Market-Making Loop](#market-making-loop) | [SDK Modifications](#sdk-modifications)
+[Getting Started](#getting-started) | [Usage](#usage) | [Architecture](#architecture)
 
 </div>
 
@@ -21,22 +20,30 @@
 
 ## Table of Contents
 
+- [The Problem](#the-problem)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
-  - [FIX Message Flow](#fix-message-flow)
-  - [Market-Making Loop](#market-making-loop)
 - [Getting Started](#getting-started)
 - [Usage](#usage)
 - [How It Works](#how-it-works)
-- [Project Structure](#project-structure)
-- [Notable Code](#notable-code)
-- [SDK Modifications](#sdk-modifications)
 - [Architectural Decisions](#architectural-decisions)
+- [Project Structure](#project-structure)
 - [Testing](#testing)
-- [Roadmap](#roadmap)
+- [Related Projects](#related-projects)
+- [Security](#security)
 - [License](#license)
 - [Author](#author)
+
+## The Problem
+
+### Sub-millisecond Order Entry for Market-Making
+
+FIX protocol is the industry standard for trading latency, but integrating it directly requires managing three concurrent session types (market data, order entry, drop copy) over TLS with asymmetric authentication. Most off-the-shelf FIX SDKs crash on malformed market-data messages, and switching between REST and FIX adds operational friction for strategies that need to iterate on pricing.
+
+### The Solution
+
+This bot provides a complete, production-ready FIX architecture for Binance spot trading: three independent TLS sessions managed by a defensive parser that skips corrupt fields instead of crashing, ED25519 signing for non-expiring keyless auth, and a configurable spread market-making loop that cycles through tick events. The design prioritizes robustness (graceful degradation) and observability (detailed logging) over feature breadth.
 
 ## Features
 
@@ -102,71 +109,6 @@ graph TD
     style OM fill:#16213e,color:#fff
     style QUEUE fill:#0f3460,color:#fff
 ```
-
-### FIX Message Flow
-
-```mermaid
-sequenceDiagram
-    participant Bot
-    participant Connector
-    participant Binance
-
-    Bot->>Connector: create_order_entry_session()
-    Connector->>Binance: Logon (35=A) + ED25519 signature
-    Binance-->>Connector: Logon (35=A) ACK
-
-    Bot->>Connector: send_message(NewOrderSingle)
-    Connector->>Binance: NewOrderSingle (35=D)
-    Binance-->>Connector: ExecutionReport (35=8)
-    Connector->>Bot: queue_msg_received.get()
-
-    Note over Connector: Heartbeat every 30s
-
-    Bot->>Connector: logout()
-    Connector->>Binance: Logout (35=5)
-```
-
-### Market-Making Loop
-
-The bot implements a simple **spread market-making** strategy that runs in an infinite loop:
-
-```mermaid
-flowchart TB
-    START([Start]) --> PLACE["Place BUY + SELL orders<br/>at spread offset"]
-    PLACE --> WAIT{Wait for fills}
-    WAIT -->|Stale / drift| CANCEL["Cancel & replace<br/>at new prices"]
-    CANCEL --> WAIT
-    WAIT -->|BUY filled| SELL_ONLY["Continue SELL only"]
-    WAIT -->|SELL filled| BUY_ONLY["Continue BUY only"]
-    SELL_ONLY --> BOTH{Both filled?}
-    BUY_ONLY --> BOTH
-    BOTH -->|No| WAIT
-    BOTH -->|Yes| RESET["Reset cycle"]
-    RESET --> PLACE
-
-    style PLACE fill:#533483,color:#fff
-    style RESET fill:#0f3460,color:#fff
-    style CANCEL fill:#16213e,color:#fff
-```
-
-**Quote pricing formula:**
-
-```python
-spread_offset = spread_percent / 200       # 0.01% → 0.00005
-
-buy_price  = current_bid * (1 - spread_offset)   # below best bid
-sell_price = current_ask * (1 + spread_offset)   # above best ask
-```
-
-**CLI parameters:**
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--symbol` | `ETHFDUSD` | Trading pair |
-| `--spread` | `0.01` | Spread offset % (`0.01` = 0.01%) |
-| `--stale-threshold` | `2` | Seconds before refreshing quotes |
-| `--qty` | `0.002` | Order quantity per side |
-| `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 
 ## Getting Started
 
@@ -236,7 +178,7 @@ uv run python examples/trade/new_order.py
 uv run python examples/maket_stream/ticker_stream.py
 ```
 
-### Sample terminal output
+### Sample Terminal Output
 
 ```
 2025-12-13 10:12:26 INFO  FIX Client: Connected to tcp+tls://fix-md.binance.com:9000
@@ -278,68 +220,46 @@ The Logon message (`35=A`) carries the request signed with the local ED25519 pri
 
 On every tick of the market-data stream, the bot compares its outstanding orders against the live best bid/ask. If either side is stale (older than `--stale-threshold` seconds) or has drifted off the desired spread, it cancels and re-places at the new price. When both sides fill within the same cycle, the loop resets.
 
+**Quote pricing formula:**
+
+```python
+spread_offset = spread_percent / 200       # 0.01% → 0.00005
+
+buy_price  = current_bid * (1 - spread_offset)   # below best bid
+sell_price = current_ask * (1 + spread_offset)   # above best ask
+```
+
+**CLI parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--symbol` | `ETHFDUSD` | Trading pair |
+| `--spread` | `0.01` | Spread offset % (`0.01` = 0.01%) |
+| `--stale-threshold` | `2` | Seconds before refreshing quotes |
+| `--qty` | `0.002` | Order quantity per side |
+| `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
+
 ### 4. Defensive parsing
 
-The original Binance SDK parser raises on malformed tag-value fields that occasionally appear in market-data symbols. The fork in `src/binance_fix_connector/fix_connector.py` skips those fields and continues, logging once for visibility — see [SDK Modifications](#sdk-modifications) for the diff.
+The original Binance SDK parser raises on malformed tag-value fields that occasionally appear in market-data symbols. The fork in `src/binance_fix_connector/fix_connector.py` skips those fields and continues, logging once for visibility:
 
-## Project Structure
+```python
+# Malformed tag-value field detection (skip and log)
+malformed = [
+    s for s in tag_values
+    if '=' not in s or (s.startswith('8=') and s != f'8={self.fix_version}')
+]
+if malformed:
+    continue  # Do not process this message
 
+# Complete-message check with exception handling
+try:
+    fix_msg = FixMessage()
+    fix_msg.append_strings([s for s in tag_values if '=' in s])
+    messages.append(fix_msg)
+except Exception:
+    continue  # Skip this message on error
 ```
-ratu-fix-bot/
-├── src/
-│   ├── binance_fix_connector/    # Forked Binance FIX SDK with defensive parser
-│   │   ├── fix_connector.py      #   parse_server_response (modified)
-│   │   └── utils.py              #   Key loading helpers
-│   └── ratu_fix_bot/             # Bot package
-│       ├── core/
-│       │   ├── bot.py            #   SpreadMMBot
-│       │   ├── market_data.py    #   Market-data subscription + tick loop
-│       │   ├── order_management.py # Place / cancel / replace
-│       │   └── session.py        #   FIX session lifecycle
-│       ├── config.py             #   Bot configuration loader
-│       └── main.py               #   CLI entrypoint
-├── examples/                     # Direct connector usage (no bot)
-│   ├── trade/                    #   new_order.py, list_OTO_order.py
-│   ├── maket_stream/             #   ticker / depth / trade streams
-│   └── general/                  #   instrument list, rate limits
-├── tests/
-│   ├── test_fix_connector.py
-│   ├── trade/                    # New-order / OTO unit tests
-│   ├── market_stream/            # Stream parser tests
-│   └── test_ratu_fix_bot/        # Bot-level unit tests
-├── .env.example
-├── pyproject.toml
-└── NOTABLE_CODE.md
-```
-
-## Notable Code
-
-> See [NOTABLE_CODE.md](NOTABLE_CODE.md) for annotated walk-throughs of the defensive parser modifications, ED25519 authentication path, three-session architecture, and the spread market-making loop.
-
-## SDK Modifications
-
-The bundled `binance_fix_connector` is a fork of the official [Binance FIX SDK](https://github.com/binance/binance-fix-connector-python) with defensive parsing applied to `parse_server_response` in `src/binance_fix_connector/fix_connector.py`:
-
-```diff
- def parse_server_response(self) -> list[FixMessage]:
-+    # --- Malformed tag-value field detection (skip and log) ---
-+    malformed = [
-+        s for s in tag_values
-+        if '=' not in s or (s.startswith('8=') and s != f'8={self.fix_version}')
-+    ]
-+    if malformed:
-+        continue  # Do not process this message
-
-+    # --- Complete-message check with exception handling ---
-+    try:
-+        fix_msg = FixMessage()
-+        fix_msg.append_strings([s for s in tag_values if '=' in s])
-+        messages.append(fix_msg)
-+    except Exception:
-+        continue  # Skip this message on error
-```
-
-**Why:** the original SDK parser crashes on certain market-data symbols whose payload contains malformed tag-value fields. The fork degrades gracefully, dropping just the bad message rather than tearing down the session.
 
 ## Architectural Decisions
 
@@ -367,6 +287,35 @@ The bundled `binance_fix_connector` is a fork of the official [Binance FIX SDK](
 
 **Reasoning:** The official SDK is sync; rewriting it to async would multiply the maintenance burden. A single dedicated receiver thread gives the same non-blocking semantics for the strategy loop without dragging in `asyncio` complexity.
 
+## Project Structure
+
+```
+ratu-fix-bot/
+├── src/
+│   ├── binance_fix_connector/    # Forked Binance FIX SDK with defensive parser
+│   │   ├── fix_connector.py      #   parse_server_response (modified)
+│   │   └── utils.py              #   Key loading helpers
+│   └── ratu_fix_bot/             # Bot package
+│       ├── core/
+│       │   ├── bot.py            #   SpreadMMBot
+│       │   ├── market_data.py    #   Market-data subscription + tick loop
+│       │   ├── order_management.py # Place / cancel / replace
+│       │   └── session.py        #   FIX session lifecycle
+│       ├── config.py             #   Bot configuration loader
+│       └── main.py               #   CLI entrypoint
+├── examples/                     # Direct connector usage (no bot)
+│   ├── trade/                    #   new_order.py, list_OTO_order.py
+│   ├── maket_stream/             #   ticker / depth / trade streams
+│   └── general/                  #   instrument list, rate limits
+├── tests/
+│   ├── test_fix_connector.py
+│   ├── trade/                    # New-order / OTO unit tests
+│   ├── market_stream/            # Stream parser tests
+│   └── test_ratu_fix_bot/        # Bot-level unit tests
+├── .env.example
+└── pyproject.toml
+```
+
 ## Testing
 
 ```bash
@@ -383,19 +332,25 @@ uv run pytest -v
 
 > Test bench includes a checked-in unit-test ED25519 key (`tests/unit_test_key.pem`) — synthetic only, never used against a live account.
 
-## Roadmap
+## Related Projects
 
-- [x] Three-session FIX architecture (MD / OE / DC)
-- [x] ED25519 logon auth
-- [x] Defensive parser for malformed market-data messages
-- [x] Spread market-making loop with stale-order replacement
-- [ ] Multi-symbol parallel quoting
-- [ ] Inventory-skew adjustment to spread
-- [ ] Prometheus metrics export
+| Project | Description |
+|---------|-------------|
+| [ratu-template](https://github.com/adityonugrohoid/ratu-template) | Scaffold + prototype template for RATU projects |
+| [ratu-rest-api](https://github.com/adityonugrohoid/ratu-rest-api) | REST API wrapper over the FIX bot for programmatic order entry |
+| [ratu-onchain-monitor](https://github.com/adityonugrohoid/ratu-onchain-monitor) | On-chain data aggregator for cross-exchange alpha |
+| [ratu-moon-radar](https://github.com/adityonugrohoid/ratu-moon-radar) | Sentiment + social feed scanner for event-driven trading |
+
+## Security
+
+- **Authentication** — ED25519 public-key cryptography; private key stored locally in PEM format, loaded at startup
+- **Data handling** — API keys and private keys always loaded from `.env` or `config.ini` (never committed); no external logging of credentials
+
+To report a vulnerability, please open an issue or contact the maintainer directly.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
 
 ## Author
 
